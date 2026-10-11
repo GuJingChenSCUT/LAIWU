@@ -3,6 +3,8 @@ import { agentDefinitions, pricing } from './data.mjs';
 import { AppError, validateBrief } from './contracts.mjs';
 import { ensureBusiness, invalidateBusiness, recordSessionObservation } from './business.mjs';
 
+export const DEFAULT_STEP_DELAY_MS = 2000;
+
 export function createProject(input, mode) {
   return { id: randomUUID(), brief: validateBrief(input), mode, status: 'queued', revision: 1, feedback: [], observations: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), outputs: {}, trace: agentDefinitions.map(a => ({ id: a.id, name: a.name, status: 'pending', source: a.usesModel ? mode : 'rules' })), approval: null, error: null };
 }
@@ -12,7 +14,7 @@ export function estimateSupply(brief) {
   return { costMin: p.min, costMax: p.max, moq: p.moq, leadDays: p.days, targetPrice: brief.targetRetailPrice ?? brief.budget, label: '規則估算示例，非供應商報價', excluded: ['物流', '稅費', '退貨', '渠道抽成', '文化授權費', '打樣與檢測費'], nextSteps: ['準備尺寸、材料與工藝圖稿', '向實際供應商詢價並索取樣品', '確認品質、必要檢測與授權後再定價'] };
 }
 
-export async function runWorkflow(project, provider, { delayMs = 350 } = {}) {
+export async function runWorkflow(project, provider, { delayMs = DEFAULT_STEP_DELAY_MS, onProgress = () => {} } = {}) {
   project.status = 'running';
   for (const definition of agentDefinitions) {
     const step = project.trace.find(s => s.id === definition.id);
@@ -20,8 +22,8 @@ export async function runWorkflow(project, provider, { delayMs = 350 } = {}) {
     step.startedAt = new Date().toISOString();
     const started = performance.now();
     project.updatedAt = step.startedAt;
+    onProgress();
     try {
-      if (delayMs && provider.mode === 'mock') await new Promise(resolve => setTimeout(resolve, delayMs));
       if (definition.usesModel) {
         // Each step sees only the dependencies it actually needs.
         const context = definition.id === 'design' ? { culture: project.outputs.culture } : definition.id === 'host' ? { culture: project.outputs.culture, design: project.outputs.design } : {};
@@ -30,16 +32,27 @@ export async function runWorkflow(project, provider, { delayMs = 350 } = {}) {
         step.usage = result.usage;
       } else if (definition.id === 'supply') project.outputs.supply = estimateSupply(project.brief);
       else project.outputs.review = { requiresHuman: true, provenance: '使用者故事／未完成外部事實核查', rights: '待確認圖稿、故事與文化元素的使用權', cost: '示例估算，尚未詢價', checks: ['故事不等於非遺認證', '創作者確認來源與使用權', '真人主持；AI 特效明示', '此版本不支援交易與公開發布'] };
+      step.processingMs = Math.round(performance.now() - started);
+      // Mock content is immediate; leave time to read each step without claiming model work.
+      if (provider.mode === 'mock') {
+        const remaining = delayMs - (performance.now() - started);
+        if (remaining > 0) await new Promise(resolve => setTimeout(resolve, Math.ceil(remaining)));
+      }
       step.status = 'completed';
+      step.completedAt = new Date().toISOString();
       step.durationMs = Math.round(performance.now() - started);
+      project.updatedAt = step.completedAt;
     } catch (error) {
       step.status = 'failed';
+      step.failedAt = new Date().toISOString();
       step.durationMs = Math.round(performance.now() - started);
       project.status = 'failed';
       project.error = { code: error instanceof AppError ? error.code : 'WORKFLOW_FAILED', message: error instanceof AppError ? error.message : '工作流失敗，請重試' };
-      project.updatedAt = new Date().toISOString();
+      project.updatedAt = step.failedAt;
+      onProgress();
       return;
     }
+    onProgress();
   }
   project.status = 'awaiting_review';
   project.updatedAt = new Date().toISOString();
@@ -61,14 +74,14 @@ export function exportProject(project) {
   const b = ensureBusiness(project);
   return [
     `# ${o.design?.title || '來物共創草稿'}`,
-    `狀態：${project.status}；內容模式：${project.mode}；版本：${project.revision}；項目負責人：${project.brief.owner}。此文件是概念草稿，不是商品認證或商業承諾。`,
+    `狀態：${project.status}；內容模式：${project.mode}；版本：${project.revision}。此文件是概念草稿，不是商品認證或商業承諾。`,
     '## 原始需求', project.brief.story, `文化來源：${project.brief.country}；在地工藝：${project.brief.craft}；目標人群：${project.brief.audience}`,
     '## 文化整理', o.culture?.interpretation || '尚未完成', ...(o.culture?.cautions || []).map(x => `- ${x}`),
     '## 商品概念', o.design?.tagline || '', o.design?.concept || '', `材料：${o.design?.materials?.join('、') || '待確認'}`,
     '## 供應鏈估算（示例）', o.supply ? `單件成本 ¥${o.supply.costMin}–${o.supply.costMax}；目標售價 ¥${o.supply.targetPrice}；示例起訂量 ${o.supply.moq}；不含${o.supply.excluded.join('、')}。需真實詢價。` : '尚未完成',
     '## 真人主播腳本', o.host?.openingZh || '', o.host?.openingEn || '', ...(o.host?.questions || []).map(x => `- ${x}`),
     '## 待確認', ...(o.review?.checks || []).map(x => `- ${x}`),
-    '## 修改記錄', ...project.feedback.map(x => `- v${x.revision} ${x.target}：${x.before} → ${x.after}；原因：${x.reason}；修改人：${x.owner}`),
+    '## 修改記錄', ...project.feedback.map(x => `- v${x.revision} ${x.target}：${x.before} → ${x.after}；原因：${x.reason}；時間：${x.at}`),
     '## 測款觀察（手動錄入，不代表獨立受訪人數或真實訂單）', ...project.observations.map(x => `- ${x.channel} / ${x.decision} / ${x.note}`),
     '## 业务交付记录（本地流程演示）',
     `路径：${b.route}；品牌来源：${b.profile.brandOrigin}；生产地：${b.profile.productionPlace}；发货地：${b.profile.shippingPlace}；销售主体：${b.profile.seller}；进口主体：${b.profile.importer}`,
@@ -80,7 +93,7 @@ export function exportProject(project) {
     ...project.observations.filter(o => o.sessionId).map(o => `- ${o.sessionId} / v${o.contentRevision} / ${o.useCase} / ${o.note}`),
     '## 品牌下一轮决定', ...b.decisions.map(d => `- ${d.decision} / ${d.reason} / 依据场次 ${d.sessionId}`),
     '## 交接日志', ...b.audit.map(a => `- ${a.at} / ${a.message}`),
-    '## 執行記錄', ...project.trace.map(x => `- ${x.name}: ${x.status}; source=${x.source}; duration=${x.durationMs ?? '-'}ms`)
+    '## 共創時間記錄', '時間為服務端實際記錄（ISO 8601 / UTC）；演示模式耗時包含閱讀停留，不代表模型推理耗時。', ...project.trace.map(x => `- ${x.name}: ${x.status}; 開始=${x.startedAt || '未開始'}; 完成=${x.completedAt || '未記錄'}; 中止=${x.failedAt || '無'}; 耗時=${x.durationMs ?? '-'}ms; source=${x.source}`)
   ].join('\n\n');
 }
 

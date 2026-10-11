@@ -5,7 +5,7 @@ import { randomUUID } from 'node:crypto';
 import { AppError } from './contracts.mjs';
 import { seeds, agentDefinitions } from './data.mjs';
 import { createProvider } from './providers.mjs';
-import { createProject, runWorkflow, approveProject, exportProject, recordCorrection, recordObservation } from './workflow.mjs';
+import { createProject, runWorkflow, approveProject, exportProject, recordCorrection, recordObservation, DEFAULT_STEP_DELAY_MS } from './workflow.mjs';
 import { createStore } from './storage.mjs';
 import { createChallenge, verifyChallenge, assessDeclaration } from './presence.mjs';
 import { ensureBusiness, businessView, mutateBusiness, businessRoutes, knowledgeCards, demoRoles, rightsValid } from './business.mjs';
@@ -13,6 +13,7 @@ import { ensureBusiness, businessView, mutateBusiness, businessRoutes, knowledge
 const publicDir = new URL('../public/', import.meta.url);
 const allowedFiles = new Map([['/', ['index.html', 'text/html']], ['/index.html', ['index.html', 'text/html']], ['/app.js', ['app.js', 'text/javascript']], ['/work.js', ['work.js', 'text/javascript']], ['/styles.css', ['styles.css', 'text/css']], ['/work.css', ['work.css', 'text/css']]]);
 for (const name of ['mediterranean', 'north-africa', 'latin-america']) allowedFiles.set(`/images/${name}.jpg`, [`images/${name}.jpg`, 'image/jpeg']);
+allowedFiles.set('/images/mediterranean-blue.png', ['images/mediterranean-blue.png', 'image/png']);
 const projectResponse = p => ({ ...p, business: businessView(p) });
 
 async function readJson(req) {
@@ -30,7 +31,7 @@ async function readJson(req) {
   return input;
 }
 
-export function createApp({ provider = createProvider(), delayMs = 350, dataPath } = {}) {
+export function createApp({ provider = createProvider(), delayMs = DEFAULT_STEP_DELAY_MS, dataPath } = {}) {
   const store = createStore(dataPath);
   const { projects } = store;
   const challenges = new Map();
@@ -67,7 +68,7 @@ export function createApp({ provider = createProvider(), delayMs = 350, dataPath
         projects.set(project.id, project);
         store.save();
         active++;
-        runWorkflow(project, provider, { delayMs }).then(() => store.save()).catch(() => {
+        runWorkflow(project, provider, { delayMs, onProgress: () => store.save() }).then(() => store.save()).catch(() => {
           project.status = 'failed';
           project.error = { code: 'PERSIST_FAILED', message: '本機儲存失敗，請檢查工作目錄權限與磁碟空間' };
         }).finally(() => { active--; });

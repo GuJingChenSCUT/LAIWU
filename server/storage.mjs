@@ -10,6 +10,12 @@ export function createStore(path) {
       if (['queued', 'running'].includes(project.status)) {
         project.status = 'failed';
         project.error = { code: 'INTERRUPTED', message: '上次執行因服務重啟中斷，請重新生成' };
+        project.updatedAt = new Date().toISOString();
+        for (const step of project.trace || []) if (step.status === 'running') {
+          step.status = 'failed';
+          // The interruption time is unknown; do not invent a completion time or duration.
+          step.interruptedAt = project.updatedAt;
+        }
       }
       projects.set(project.id, project);
     }

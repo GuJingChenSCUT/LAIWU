@@ -84,7 +84,7 @@ export function quoteReadiness(b, quote) {
 export function businessTasks(p) {
   const b = ensureBusiness(p);
   return [
-    { id: 'brief', owner: 'brand', name: '补齐项目边界', output: '来源 / 生产地 / 卖方责任', done: !Object.values(b.profile).includes('待确认'), next: '文化创作者', tab: 'overview' },
+    { id: 'brief', owner: 'brand', name: '补齐项目边界', output: '来源 / 生产地 / 卖方责任', done: !Object.entries(b.profile).some(([key, value]) => key !== 'confirmer' && value === '待确认'), next: '文化创作者', tab: 'overview' },
     { id: 'rights', owner: 'culture', name: '确认文化与素材范围', output: '本地展示记录 + 署名', done: rightsValid(b) && hasConfirmation(p, 'culture'), next: '品牌方与主播', tab: 'rights' },
     { id: 'concept', owner: 'brand', name: '签收当前概念', output: `内容 v${p.revision} 展示确认`, done: hasConfirmation(p, 'brand'), next: '供应商 / 主播', tab: 'overview' },
     { id: 'rfq', owner: 'supplier', name: '回复同一规格询价', output: '报价草稿或无法承接原因', done: b.quotes.some(q => quoteReadiness(b, q).ready), next: '品牌方', tab: 'sourcing' },

@@ -35,10 +35,13 @@ export function validateSchema(value, schema, path = 'result') {
 export function validateBrief(input) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) throw new AppError('INVALID_INPUT', '請提供創作需求');
   const result = {};
-  for (const [key, max] of Object.entries({ country: 40, story: 1500, craft: 80, audience: 100, productType: 20, owner: 60 })) {
+  for (const [key, max] of Object.entries({ country: 40, story: 1500, craft: 80, audience: 100, productType: 20 })) {
     if (typeof input[key] !== 'string' || !input[key].trim() || input[key].length > max) throw new AppError('INVALID_INPUT', `${key} 必須有內容，且不超過 ${max} 字`);
     result[key] = input[key].trim();
   }
+  // Preserve compatibility with earlier drafts without requiring personal ownership details.
+  if (input.owner !== undefined && (typeof input.owner !== 'string' || input.owner.length > 60)) throw new AppError('INVALID_INPUT', '创作署名需为不超过 60 字的文字');
+  result.owner = input.owner?.trim() || '共创者';
   if (!['陶瓷杯', '帆布袋', '裝飾燈'].includes(result.productType)) throw new AppError('INVALID_INPUT', '請選擇支援的商品類型');
   const price = input.targetRetailPrice ?? input.budget;
   if (typeof price !== 'number' || !Number.isFinite(price) || price < 50 || price > 500) throw new AppError('INVALID_INPUT', '單件目標售價需為 50–500 元');

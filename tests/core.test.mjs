@@ -15,11 +15,31 @@ const brief = seeds[0];
 const mock = createProvider({ AI_PROVIDER: 'mock' });
 const config = { AI_PROVIDER: 'openai-compatible', AI_BASE_URL: 'https://example.test/v1', AI_MODEL: 'configured-model', AI_API_KEY: 'test-only-not-a-real-key' };
 
-test('brief validation rejects missing ownership and invalid budgets', () => {
-  assert.throws(() => validateBrief({ ...brief, owner: '' }), /owner/);
+test('brief accepts stories without ownership details and rejects invalid budgets', () => {
+  const { owner, ...withoutOwner } = brief;
+  assert.equal(validateBrief(withoutOwner).owner, '共创者');
+  assert.equal(validateBrief({ ...brief, owner: '' }).owner, '共创者');
+  assert.throws(() => validateBrief({ ...brief, owner: 123 }), /署名/);
   assert.throws(() => validateBrief({ ...brief, budget: '129' }), /售價/);
   assert.throws(() => validateBrief({ ...brief, budget: NaN }), /售價/);
   assert.throws(() => validateBrief({ ...brief, story: ' ' }), /story/);
+});
+
+test('workflow records sequential real timestamps and exposes paced progress', async () => {
+  const p = createProject(brief, 'mock');
+  const progress = [];
+  await runWorkflow(p, mock, { delayMs: 40, onProgress: () => progress.push(structuredClone(p.trace)) });
+  assert.equal(progress.length, 10);
+  for (const [i, step] of p.trace.entries()) {
+    assert.equal(progress[i * 2][i].status, 'running');
+    assert.equal(progress[i * 2][i].completedAt, undefined);
+    assert.equal(progress[i * 2 + 1][i].status, 'completed');
+    assert.ok(step.durationMs >= 39, `step ${step.id} skipped its reading interval`);
+    assert.ok(Date.parse(step.completedAt) >= Date.parse(step.startedAt));
+    assert.ok(Math.abs(Date.parse(step.completedAt) - Date.parse(step.startedAt) - step.durationMs) <= 2);
+    assert.ok(step.processingMs <= step.durationMs);
+    if (i) assert.ok(Date.parse(step.startedAt) >= Date.parse(p.trace[i - 1].completedAt));
+  }
 });
 
 test('workflow gates demonstration until a person acknowledges the version', async () => {
@@ -48,6 +68,9 @@ test('provider failures stop later steps and never become silent mock success', 
   const p = createProject(brief, 'openai-compatible');
   await runWorkflow(p, { mode: 'openai-compatible', generate: async () => { throw new Error('secret upstream error'); } }, { delayMs: 0 });
   assert.equal(p.status, 'failed'); assert.equal(p.trace[1].status, 'pending');
+  assert.ok(p.trace[0].startedAt && p.trace[0].failedAt);
+  assert.equal(p.trace[0].completedAt, undefined);
+  assert.equal(p.trace[1].startedAt, undefined);
   assert.ok(!JSON.stringify(p).includes('secret upstream'));
 });
 
@@ -97,7 +120,16 @@ test('local storage retains feedback after reopening and marks interrupted runs'
     recordCorrection(p, { target: 'tagline', replacement: '保留這次修改', reason: '復盤可追溯' });
     store.projects.set(p.id, p); store.save();
     assert.equal(createStore(path).projects.get(p.id).feedback.length, 1);
-    p.status = 'running'; store.save(); assert.equal(createStore(path).projects.get(p.id).error.code, 'INTERRUPTED');
+    assert.deepEqual(createStore(path).projects.get(p.id).trace, p.trace);
+    p.status = 'running';
+    p.trace[0] = { id: 'culture', status: 'running', startedAt: new Date().toISOString() };
+    store.save();
+    const interrupted = createStore(path).projects.get(p.id);
+    assert.equal(interrupted.error.code, 'INTERRUPTED');
+    assert.equal(interrupted.trace[0].status, 'failed');
+    assert.ok(interrupted.trace[0].interruptedAt);
+    assert.equal(interrupted.trace[0].completedAt, undefined);
+    assert.equal(interrupted.trace[0].durationMs, undefined);
   } finally { rmSync(folder, { recursive: true, force: true }); }
 });
 

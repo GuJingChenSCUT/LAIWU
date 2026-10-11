@@ -10,6 +10,7 @@ const { resolve } = require('node:path');
   mkdirSync('artifacts', { recursive: true });
   const shot = name => page.screenshot({ path: resolve('artifacts', name), fullPage: true });
   const noOverflow = async () => assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, `overflow at ${page.url()}`);
+  const userFacing = async () => assert.doesNotMatch(await page.locator('body').innerText(), /负责人|負責人|责任人|責任人/);
   async function go(route) { await page.evaluate(hash => { location.hash = hash; }, route); await page.locator(`#page-${route.split('/')[0]}`).waitFor({ state: 'visible' }); }
   const role = id => page.locator(`.role-switch [data-wrole="${id}"]`).click();
   const tab = id => page.locator(`.work-sidebar [data-wtab="${id}"]`).click();
@@ -26,13 +27,35 @@ const { resolve } = require('node:path');
   try {
     await page.goto('http://127.0.0.1:3100');
     await page.getByText('免密鑰演示', { exact: true }).waitFor();
+    await page.waitForFunction(() => document.querySelector('.hero-photo')?.naturalWidth > 0);
+    assert.equal(await page.locator('.hero-photo').getAttribute('src'), '/images/mediterranean-blue.png');
+    await page.locator('.hero-art').screenshot({ path: resolve('artifacts', 'homepage-blue-hero.png') });
     await page.locator('#seed-grid').scrollIntoViewIfNeeded();
     await page.waitForFunction(() => [...document.querySelectorAll('.seed-photo')].length === 3 && [...document.querySelectorAll('.seed-photo')].every(img => img.complete && img.naturalWidth > 0));
     assert.deepEqual(await page.locator('.seed-photo').evaluateAll(images => images.map(img => img.getAttribute('src'))), ['/images/mediterranean.jpg', '/images/north-africa.jpg', '/images/latin-america.jpg']);
     await page.locator('#seed-grid').screenshot({ path: resolve('artifacts', 'homepage-reference-photos.png') });
     await shot('desktop-home.png');
-    await go('studio'); await page.locator('#seed-select').selectOption('morocco'); await page.locator('#generate-button').click();
+    await go('studio'); await page.locator('#seed-select').selectOption('morocco');
+    assert.equal(await page.locator('#brief-form [name=owner]').count(), 0);
+    await page.locator('#generate-button').click();
+    for (const id of ['culture', 'design', 'supply', 'host', 'review']) {
+      await page.locator(`[data-step=${id}].running`).waitFor();
+      assert.equal(await page.locator(`[data-step=${id}] time`).count(), 1);
+      assert.match(await page.locator(`[data-step=${id}] .step-duration`).textContent(), /已進行/);
+      if (id === 'design') await page.locator('.workflow-bar').screenshot({ path: resolve('artifacts', 'workflow-in-progress.png') });
+    }
     await page.getByText('等待創作者確認', { exact: true }).waitFor();
+    assert.equal(await page.locator('.agent-step.completed').count(), 5);
+    assert.equal(await page.locator('.agent-step time').count(), 10);
+    const recordedTimes = await page.locator('.agent-step time').evaluateAll(nodes => nodes.map(node => node.dateTime));
+    const projectId = await page.evaluate(() => localStorage.getItem('laiwu-project-id'));
+    const generated = await (await page.request.get(`http://127.0.0.1:3100/api/projects/${projectId}`)).json();
+    assert.ok(generated.trace.every(step => step.durationMs >= 1999 && step.startedAt && step.completedAt));
+    assert.deepEqual(recordedTimes, generated.trace.flatMap(step => [step.startedAt, step.completedAt]));
+    await page.reload(); await page.locator('.agent-step.completed').first().waitFor();
+    assert.deepEqual(await page.locator('.agent-step time').evaluateAll(nodes => nodes.map(node => node.dateTime)), recordedTimes);
+    await page.locator('.workflow-bar').screenshot({ path: resolve('artifacts', 'workflow-completed.png') });
+    await userFacing();
     await go('work'); await role('culture');
     await page.locator('[name=credit]').fill('Amina · 虚构文化故事与原创示意图');
     await page.locator('[name=evidence]').fill('牛客松演示素材，仅用于本机展示与样品流程演练，无真实商业授权。');
@@ -80,12 +103,12 @@ const { resolve } = require('node:path');
     await tab('delivery'); await page.getByText('先补充面料实物与图案来源展示，再邀请下一批体验者。', { exact: true }).waitFor();
     await go('insights'); await page.locator('#observation-list').getByText('旧场次后补意见：适合送给朋友。', { exact: true }).waitFor(); await shot('desktop-insights-v02.png');
     await page.setViewportSize({ width: 390, height: 844 });
-    for (const hash of ['discover', 'studio', 'live', 'insights', 'architecture']) { await go(hash); await noOverflow(); await shot(`mobile-${hash}-v02.png`); }
+    for (const hash of ['discover', 'studio', 'live', 'insights', 'architecture']) { await go(hash); await noOverflow(); await userFacing(); await shot(`mobile-${hash}-v02.png`); }
     await go('work');
-    for (const id of ['brand', 'culture', 'supplier', 'host', 'audience']) { await role(id); await noOverflow(); await shot(`mobile-work-${id}.png`); }
+    for (const id of ['brand', 'culture', 'supplier', 'host', 'audience']) { await role(id); await noOverflow(); await userFacing(); await shot(`mobile-work-${id}.png`); }
     await role('brand'); for (const id of ['rights', 'sourcing', 'script', 'delivery']) { await tab(id); await noOverflow(); }
     assert.deepEqual(errors, []);
-    writeFileSync(resolve('artifacts', 'business-browser-validation.json'), JSON.stringify({ checkedAt: new Date().toISOString(), projectId: state.id, actions: evidence, pageErrors: errors, result: 'PASS', viewports: [1440, 390] }, null, 2));
+    writeFileSync(resolve('artifacts', 'business-browser-validation.json'), JSON.stringify({ checkedAt: new Date().toISOString(), projectId: state.id, workflow: generated.trace, actions: evidence, pageErrors: errors, result: 'PASS', viewports: [1440, 390] }, null, 2));
     console.log('PASS: role handoffs, incomplete/complete quote, sample rework, bilingual review, camera failure, offline local stop, old-version feedback, decisions, reload, export, mobile without overflow or JS errors.');
   } catch (error) { await shot('browser-failure.png'); throw error; }
   finally { await browser.close(); }

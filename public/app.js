@@ -49,16 +49,27 @@ function route() {
 
 function fillSeed(id) {
   const seed = catalog.seeds.find(s => s.id === id) || catalog.seeds[0];
-  for (const field of ['country', 'story', 'craft', 'audience', 'productType', 'budget', 'owner']) $('#brief-form').elements[field].value = seed[field];
+  for (const field of ['country', 'story', 'craft', 'audience', 'productType', 'budget']) $('#brief-form').elements[field].value = seed[field];
   $('#seed-select').value = seed.id;
 }
 
 function renderSteps() {
   const steps = project?.trace || catalog.agents.map(a => ({ ...a, status: 'pending' }));
-  $('#agent-steps').innerHTML = steps.map((s, i) => `<div class="agent-step ${s.status}"><span class="step-dot">${s.status === 'completed' ? '✓' : s.status === 'failed' ? '!' : i + 1}</span>${e(s.name)}</div>`).join('');
+  const clock = value => new Date(value).toLocaleTimeString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false });
+  const time = value => `<time datetime="${e(value)}">${e(clock(value))}</time>`;
+  const hints = { culture: '從你的故事裡，找到值得留下的細節', design: '讓文化元素遇見材料、形狀與工藝', supply: '看看示例成本、起訂量與待詢價事項', host: '準備雙語開場，把自由發揮留給你', review: '梳理來源、素材使用範圍與待確認事項' };
+  const labels = { pending: '等待開始', running: '進行中', completed: '已完成', failed: '未完成' };
+  $('#agent-steps').innerHTML = steps.map((s, i) => {
+    const name = catalog.agents.find(a => a.id === s.id)?.name || s.name;
+    const elapsed = s.durationMs ?? (s.status === 'running' && s.startedAt ? Math.max(0, Date.now() - Date.parse(s.startedAt)) : null);
+    const timing = s.startedAt ? `開始 ${time(s.startedAt)}${s.completedAt ? ` <span>→</span> 完成 ${time(s.completedAt)}` : s.failedAt ? ` · 中止 ${time(s.failedAt)}` : s.interruptedAt ? ' · 執行中斷，結束時間未記錄' : s.status === 'completed' ? ' · 舊提案未記錄完成時間' : ''}` : '輪到這一步時，會記下開始時間';
+    return `<li class="agent-step ${s.status}" data-step="${e(s.id)}" ${s.status === 'running' ? 'aria-current="step"' : ''}><span class="step-dot" aria-hidden="true">${s.status === 'completed' ? '✓' : s.status === 'failed' ? '!' : String(i + 1).padStart(2, '0')}</span><div class="step-content"><div class="step-heading"><strong>${e(name)}</strong><span class="step-status">${labels[s.status]}</span></div><p class="step-description">${hints[s.id] || ''}</p><div class="step-timing">${timing}${elapsed === null ? '' : `<span class="step-duration">${s.status === 'running' ? '已進行' : '耗時'} ${(elapsed / 1000).toFixed(1)} 秒</span>`}</div></div></li>`;
+  }).join('');
   $('#workflow-state').textContent = project ? statusNames[project.status] : '等待靈感';
   const current = steps.find(s => s.status === 'running');
-  $('#workflow-message').textContent = current ? `${current.name}正在執行 · ${current.source === 'mock' ? '本地演示模板' : current.source === 'rules' ? '確定性規則' : '模型 API'}` : project ? `v${project.revision} · 負責人：${project.brief.owner} · ${project.mode === 'mock' ? '本地演示模板；未調用大模型' : '真實模型回應；仍需人工核查'}` : '從故事開始，經過 5 個步驟，再交給你確認。';
+  $('#workflow-timing').textContent = project ? `${new Date(project.createdAt).toLocaleDateString('zh-CN', { timeZone: 'Asia/Shanghai' })} · 北京時間 · 已完成 ${steps.filter(s => s.status === 'completed').length} / 5` : '每一段靈感，都有自己的節奏。';
+  $('#workflow-message').textContent = current ? `正在${catalog.agents.find(a => a.id === current.id)?.name || current.name}，你可以在這裡查看進度。` : project ? project.status === 'failed' ? '這次共創暫停了。已完成的步驟會保留，你可以調整故事後重新生成。' : `提案 v${project.revision} · 接下來，看看哪些細節最像你的故事。` : '從故事開始，經過 5 個步驟，再交給你確認。';
+  $('#workflow-pace').textContent = (project?.mode || catalog.mode) === 'mock' ? '演示節奏每步至少 2 秒，耗時包含閱讀停留；使用示例模板，未調用大模型。' : '時間按實際執行記錄；文化內容與使用範圍仍需你確認。';
 }
 
 function renderProject() {
@@ -71,7 +82,7 @@ function renderProject() {
   } else if (['queued', 'running'].includes(project.status)) {
     $('#proposal').innerHTML = '<div class="empty-state"><div class="empty-art">✳</div><h2>讓文化與工藝，<br>慢慢找到彼此。</h2><p>完成後會交給你確認，過程可在上方查看。</p></div>';
   } else {
-    $('#proposal').innerHTML = `<div class="panel"><div class="proposal-hero"><div class="art-wrap">${productArt(project.brief.productType, o.design.palette[0])}<small>程式繪製概念示意 · 非商品實拍</small></div><div><div class="eyebrow">${e(project.brief.country)} × ${e(project.brief.craft)}</div><h2>${e(o.design.title)}</h2><p>${e(o.design.tagline)}</p><div class="swatches">${o.design.palette.map(c => `<i style="background:${c}" title="${c}"></i>`).join('')}</div></div></div><div class="proposal-section"><h3>把故事變成產品</h3><p>${e(o.design.concept)}</p><p>材料提案：${o.design.materials.map(e).join('、')}</p></div><div class="proposal-section"><h3>文化有來處</h3><p>${e(o.culture.interpretation)}</p><ul>${o.culture.cautions.map(x => `<li>${e(x)}</li>`).join('')}</ul></div><div class="proposal-section"><h3>先算一筆小帳 <span class="tag">非實際報價</span></h3><div class="cost-grid"><div><span>單件示例成本</span><strong>¥${o.supply.costMin}–${o.supply.costMax}</strong></div><div><span>目標售價</span><strong>¥${o.supply.targetPrice}</strong></div><div><span>示例起訂量</span><strong>${o.supply.moq} 件</strong></div></div><p>示例交期 ${e(o.supply.leadDays)} 天。未扣除${o.supply.excluded.map(e).join('、')}；需向真實供應商確認。</p></div><div class="review-box"><p class="fine">文化、品牌与讲稿分别签收；询价与采购各自确认。内容修改后会重开当前版本确认。</p><a href="#work" class="btn primary wide">进入合作工作台，完成分角色交接 →</a></div><details class="edit-details"><summary>修改一處，讓系統留下原因</summary><form id="correction-form"><label>修改位置<select name="target"><option value="tagline">商品標語</option><option value="openingZh">中文主播開場</option></select></label><label>修改後內容<textarea name="replacement" maxlength="1500" rows="3" required></textarea></label><label>為什麼這樣改？<input name="reason" maxlength="500" required placeholder="例如：保留個人故事，避免代言整個國家的文化"></label><button class="btn" type="submit">保存修訂並重新確認</button></form></details></div>`;
+    $('#proposal').innerHTML = `<div class="panel"><div class="proposal-hero"><div class="art-wrap">${productArt(project.brief.productType, o.design.palette[0])}<small>程式繪製概念示意 · 非商品實拍</small></div><div><div class="eyebrow">${e(project.brief.country)} × ${e(project.brief.craft)}</div><h2>${e(o.design.title)}</h2><p>${e(o.design.tagline)}</p><div class="swatches">${o.design.palette.map(c => `<i style="background:${c}" title="${c}"></i>`).join('')}</div></div></div><div class="proposal-section"><h3>把故事變成產品</h3><p>${e(o.design.concept)}</p><p>材料提案：${o.design.materials.map(e).join('、')}</p></div><div class="proposal-section"><h3>文化有來處</h3><p>${e(o.culture.interpretation)}</p><ul>${o.culture.cautions.map(x => `<li>${e(x)}</li>`).join('')}</ul></div><div class="proposal-section"><h3>先算一筆小帳 <span class="tag">非實際報價</span></h3><div class="cost-grid"><div><span>單件示例成本</span><strong>¥${o.supply.costMin}–${o.supply.costMax}</strong></div><div><span>目標售價</span><strong>¥${o.supply.targetPrice}</strong></div><div><span>示例起訂量</span><strong>${o.supply.moq} 件</strong></div></div><p>示例交期 ${e(o.supply.leadDays)} 天。未扣除${o.supply.excluded.map(e).join('、')}；需向真實供應商確認。</p></div><div class="review-box"><p class="fine">和文化创作者、品牌及主播一起确认这份提案，再带着它开始询价或试讲。修改内容后，记得一起核对新版。</p><a href="#work" class="btn primary wide">一起完善这份提案 →</a></div><details class="edit-details"><summary>讓這份提案，更像你的故事</summary><form id="correction-form"><label>修改位置<select name="target"><option value="tagline">商品標語</option><option value="openingZh">中文主播開場</option></select></label><label>修改後內容<textarea name="replacement" maxlength="1500" rows="3" required></textarea></label><label>為什麼這樣改？<input name="reason" maxlength="500" required placeholder="例如：保留個人故事，避免代言整個國家的文化"></label><button class="btn" type="submit">保存修訂並重新確認</button></form></details></div>`;
   }
   renderLive();
   renderInsights();
@@ -97,12 +108,12 @@ function renderInsights() {
   if (!available) return;
   const obs = project.observations;
   $('#insight-metrics').innerHTML = `<div class="metric"><span>觀察記錄</span><strong>${obs.length}</strong><small>次手動錄入，非受訪人數</small></div><div class="metric"><span>人工修訂</span><strong>${project.feedback.length}</strong><small>次修改，保留前後版本</small></div><div class="metric"><span>當前版本</span><strong>v${project.revision}</strong><small>${project.status === 'demo_ready' ? '已確認，可演示' : '修改後待重新確認'}</small></div>`;
-  $('#insight-version').textContent = `責任人：${project.brief.owner}`;
+  $('#insight-version').textContent = `內容 v${project.revision}`;
   const sessions = project.business?.sessions || [];
   $('#observation-session').innerHTML = sessions.length ? sessions.map(s => `<option value="${s.id}">试讲 ${s.number} / v${s.contentRevision}${s.state === 'closed' ? '（已关闭）' : ''}</option>`).join('') : '<option value="">先建立试讲场次</option>';
   $('#observation-form button').disabled = !sessions.some(s => s.state === 'open' && Date.parse(s.feedbackUntil) > Date.now()) || !project.business?.rightsValid;
   $('#observation-list').innerHTML = obs.length ? obs.slice(-6).reverse().map(x => `<div class="observation"><small>${x.channel === 'campus' ? '校園' : '直播'} · ${x.sessionId ? '场次 ' + e(x.sessionId.slice(0, 8)) : '旧版手动记录'} · v${x.revision} · ${decisions[x.decision]}</small><p>${e(x.note)}</p></div>`).join('') : '<p>還沒有觀察記錄。先邀請觀眾聽一段故事，再記下他們的原話。</p><p class="fine">先建立试讲场次；记录始终属于该场次版本。</p>';
-  $('#revision-list').innerHTML = project.feedback.length ? project.feedback.slice(-6).reverse().map(x => `<div class="observation"><small>v${x.revision} · ${e(x.owner)} · ${x.target === 'tagline' ? '商品標語' : '中文開場'}</small><p><del>${e(x.before)}</del></p><p>${e(x.after)}</p><p>修改原因：${e(x.reason)}</p></div>`).join('') : '<p class="fine">尚無修訂。在共創提案下方可修改標語或中文開場，保存後會重新進入確認環節。</p>';
+  $('#revision-list').innerHTML = project.feedback.length ? project.feedback.slice(-6).reverse().map(x => `<div class="observation"><small>v${x.revision} · ${x.target === 'tagline' ? '商品標語' : '中文開場'}</small><p><del>${e(x.before)}</del></p><p>${e(x.after)}</p><p>修改原因：${e(x.reason)}</p></div>`).join('') : '<p class="fine">尚無修訂。在共創提案下方可修改標語或中文開場，保存後會重新進入確認環節。</p>';
 }
 
 async function pollProject(id) {
@@ -172,7 +183,7 @@ document.addEventListener('click', async event => {
       const effect = button.dataset.effect;
       clearTimeout(effectTimer);
       $('#mascot').className = `mascot ${effect}`; $('#stage').className = `stage ${effect}`;
-      $('#mascot-speech').textContent = ({ hello: '嗨！今天由你講故事，我負責捧場。', story: '文化交流的第一步？先交流一下誰洗杯子。', spark: '一顆靈感星送給你！下一個家鄉故事是什麼？' })[effect];
+      $('#mascot-speech').textContent = ({ hello: '嗨！今天由你講故事，我來捧場。', story: '文化交流的第一步？先交流一下誰洗杯子。', spark: '一顆靈感星送給你！下一個家鄉故事是什麼？' })[effect];
       effectTimer = setTimeout(() => { $('#mascot').className = 'mascot'; $('#stage').className = 'stage'; }, 1900);
     }
     if (button.id === 'policy-button') await withButton(button, async () => { const result = await api('/api/presence/policy', { mode: $('#host-mode').value }); $('#policy-result').textContent = `${result.label}。${result.nextAction}。${result.evidence}。`; });
@@ -225,11 +236,10 @@ async function boot() {
   route();
   try {
     const [data, health] = await Promise.all([api('/api/catalog'), api('/api/health')]);
-    catalog = data;
+    catalog = { ...data, mode: health.mode };
     workspace.init(data);
     $('#mode-pill').textContent = health.mode === 'mock' ? '免密鑰演示' : '模型已配置';
     $('#provider-note').textContent = health.mode === 'mock' ? '演示模式使用本地模板，不發送模型請求。資料保存在本機。' : '真實模型模式：故事與創作需求會傳送至服務端配置的模型服務商。';
-    $('#hero-object').innerHTML = productArt();
     $('#seed-select').innerHTML = data.seeds.map(seed => `<option value="${seed.id}">${e(seed.country)} · ${e(seed.productType)}</option>`).join('');
     $('#seed-grid').innerHTML = data.seeds.map(seed => `<article class="seed-card"><div class="seed-art seed-photo-${e(seed.id)}"><img class="seed-photo" src="${e(seed.photo)}" alt="${e(seed.photoAlt)}" loading="lazy" decoding="async"><span class="tag">${e(seed.region)}</span><small class="photo-caption">用户提供 · 灵感参考图</small></div><div class="seed-body"><div class="eyebrow">${e(seed.creator)} 的文化來信 / 虛構示例</div><h3>${e(seed.title)}</h3><p>${e(seed.subtitle)}</p><div class="seed-meta"><span>概念商品 · 待共創</span><button class="btn" data-start="${seed.id}">用這個靈感 ↗</button></div></div></article>`).join('');
     $('#arch-agents').innerHTML = data.agents.map((agent, i) => `<button data-agent="${agent.id}" class="${i === 0 ? 'selected' : ''}" aria-pressed="${i === 0}">${e(agent.name)}<small>${e(agent.role)}</small></button>`).join('');
