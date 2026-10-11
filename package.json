@@ -1,0 +1,13 @@
+{
+  "name": "laiwu-culture-commons",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "description": "牛客松：文化共創 × 真人直播，可離線演示的產品原型",
+  "engines": { "node": ">=22.9" },
+  "scripts": {
+    "start": "node --env-file-if-exists=.env server/index.mjs",
+    "dev": "node --watch --env-file-if-exists=.env server/index.mjs",
+    "test": "node --test tests/*.test.mjs"
+  }
+}

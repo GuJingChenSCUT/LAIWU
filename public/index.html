@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#243c32"><title>來物 LAIWU · 讓文化相遇，讓創造發生</title>
+  <link rel="stylesheet" href="/styles.css"><link rel="stylesheet" href="/work.css"><script src="/app.js" type="module"></script>
+</head>
+<body>
+  <a class="skip" href="#main">跳到主要內容</a>
+  <header class="header">
+    <a class="brand" href="#discover" aria-label="來物首頁"><span class="brand-mark">来</span><span>來物 <small>LAIWU</small></span></a>
+    <nav aria-label="主要導覽">
+      <a href="#discover" data-page="discover">灵感集市</a><a href="#work" data-page="work">合作工作台</a><a href="#studio" data-page="studio">共创设计</a><a href="#live" data-page="live">真人舞台</a><a href="#insights" data-page="insights">测款复盘</a>
+    </nav>
+    <span class="mode-pill" id="mode-pill">正在連接…</span>
+  </header>
+  <main id="main">
+    <section id="page-discover" class="page">
+      <div class="hero">
+        <div class="hero-copy"><div class="eyebrow">CULTURE MEETS CREATION / 文化共創實驗室</div>
+          <h1>世界的故事，<br>在這裡長出<br><em>新東西。</em><span class="small-star" aria-hidden="true">✳</span></h1>
+          <p class="intro">從一段家鄉記憶，到一件跨文化好物。<br>和真實的人一起創作，讓 AI 為靈感搭一座橋。</p>
+          <div class="actions"><button class="btn primary" data-start="italy">共創一件好物 <span>↗</span></button><a class="text-link" href="#live">看看真人舞台 →</a></div>
+          <div class="hero-note"><span class="avatar-stack" aria-hidden="true"><i>L</i><i>A</i><i>D</i></span><span>不同的文化，同一張創作桌<br><small>牛客松 · Wild Creation 概念原型</small></span></div>
+        </div>
+        <div class="hero-art" aria-label="藍色茶杯與跨文化故事卡的原創概念插畫">
+          <div class="orb orb-a"></div><div class="orb orb-b"></div><div class="art-caption">OBJECTS WITH A STORY</div>
+          <div class="hero-object" id="hero-object"></div>
+          <div class="floating-note note-a"><span>01 / 一段文化記憶</span><strong>「祖母餐桌上的藍，<br>是我記得的海。」</strong><small>Lucia · 虛構示例</small></div>
+          <div class="floating-note note-b"><span>02 / 一次新的相遇</span><strong>地中海的藍 × 嶺南的茶</strong><small>共創概念 · 待打樣</small></div>
+          <div class="art-stamp">HUMAN<br>STORIES<br><b>AI × CRAFT</b></div>
+        </div>
+      </div>
+      <div class="principles"><div><b>01</b><span>文化有來處<small>由創作者講述與確認</small></span></div><div><b>02</b><span>創作有幫手<small>AI 整理、設計、準備腳本</small></span></div><div><b>03</b><span>鏡頭前有人<small>真人表達，特效助興</small></span></div></div>
+      <div class="section-heading"><div><div class="eyebrow">THE FIRST ENCOUNTER</div><h2>從一個故事開始</h2></div><span class="muted">3 個靈感種子 · 人物與商品均為演示</span></div>
+      <div id="seed-grid" class="seed-grid"></div>
+      <div class="business-strip"><span class="eyebrow">FROM IDEA TO EVIDENCE</span><h3>先幫一個品牌，完成一次中國市場測款。</h3><p>文化故事 → 共創概念 → 真人講述 → 反饋復盤。每一版都留下修改原因與負責人。</p><a href="#insights" class="text-link">看看怎樣留下反饋 →</a><div class="entry-actions"><a class="btn primary" href="#work">让我的品牌进入中国 →</a><a class="btn" href="#work/rights">参与文化共创 ↗</a><a class="btn" href="#work/audience">体验作品与反馈 ↗</a></div></div>
+    </section>
+
+    <section id="page-work" class="page" hidden><div id="work-root"></div></section>
+    <section id="page-studio" class="page" hidden>
+      <div class="page-heading"><div><div class="eyebrow">CO-CREATION STUDIO / 01</div><h1>讓靈感，有個形狀。</h1><p>填入一段故事，和 AI 一起準備第一份測款提案。</p></div><button class="btn" id="export-button" disabled>匯出共創提案 ↗</button></div>
+      <div class="studio-grid">
+        <form id="brief-form" class="panel form-panel">
+          <div class="panel-heading"><h2>你的創作起點</h2><span class="tag">BRIEF</span></div>
+          <label>靈感示例<select id="seed-select" aria-label="選擇靈感示例"></select></label>
+          <div class="form-row"><label>文化來源<input name="country" maxlength="40" required></label><label>商品方向<select name="productType"><option>陶瓷杯</option><option>帆布袋</option><option>裝飾燈</option></select></label></div>
+          <label>你的文化故事<textarea name="story" rows="5" maxlength="1500" required></textarea></label>
+          <label>想結合的在地工藝<input name="craft" maxlength="80" required></label>
+          <label>你想打動的人<input name="audience" maxlength="100" required></label>
+          <div class="form-row"><label>目標售價 / 人民幣<input name="budget" type="number" min="50" max="500" required></label><label>項目負責人<input name="owner" maxlength="60" required></label></div>
+          <button class="btn primary wide" id="generate-button" type="submit">生成共創提案 <span>✳</span></button>
+          <p class="fine" id="provider-note">演示模式使用本地模板，可離線運行。</p>
+        </form>
+        <div class="studio-output">
+          <div class="workflow-bar panel"><div class="panel-heading"><h2>共創進度</h2><span id="workflow-state" class="tag">等待靈感</span></div><div id="agent-steps" class="agent-steps"></div><p id="workflow-message" class="fine" aria-live="polite">從故事開始，經過 5 個步驟，再交給你確認。</p></div>
+          <div id="proposal"><div class="empty-state"><div class="empty-art">✳</div><h2>每個普通人的故事，<br>都值得有一件作品。</h2><p>左側已備好一個示例。也可以寫下你自己的故事。</p></div></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="page-live" class="page" hidden>
+      <div class="page-heading"><div><div class="eyebrow">HUMAN ON STAGE / 02</div><h1>有趣的靈魂，自己上場。</h1><p>你負責講故事，「來來」負責為你的靈感喝采。</p></div><span class="tag">本地舞台預覽 · 未對外推流</span></div>
+      <div id="live-locked" class="empty-state compact"><h2>先把三方确认接好。</h2><p>文化方确认来源与范围，品牌确认展示内容，主播核对双语稿后建立本机场次。</p><a class="btn primary" href="#work/script">前往合作工作台 →</a></div>
+      <div id="live-content" hidden>
+        <div class="demo-context"><b id="stage-session"></b><span>停止按钮仅控制本机画面 · 当前无外部推流</span></div>
+        <div class="stage-controls"><button class="btn danger" id="stop-stage">停止画面与特效</button><button class="btn" id="resume-stage" hidden>恢复本机舞台</button></div><p class="stopped-note" id="stage-stop-note" hidden>本机镜头与特效已停止。此动作无需模型或网络响应；场次反馈窗口可在合作工作台单独关闭。</p>
+        <div class="live-grid"><div><div class="stage" id="stage"><video id="camera-video" muted autoplay playsinline hidden></video><div class="stage-grid"></div><div class="stage-top"><span class="stage-badge">◉ 真人主持 · AI 輔助視覺概念</span><span>PREVIEW</span></div><div class="stage-title"><small>一物一故事</small><h2 id="stage-product-title"></h2><p>把故事說給彼此聽。</p></div><div class="mascot" id="mascot" aria-label="來來：由真人按鈕控制的立體互動角色"><span class="antenna">✳</span><div class="mascot-body"><i></i><i></i><b>⌣</b></div><div class="mascot-feet"><i></i><i></i></div></div><div class="speech" id="mascot-speech" aria-live="polite">嗨，我是來來。今天的主角是你！</div><div class="stage-bottom"><span>特效角色 · 真人觸發</span><span>✦ LAIWU LIVE LAB</span></div></div>
+          <div class="stage-controls"><button class="btn" id="camera-button">開啟本機鏡頭</button><button class="btn" data-effect="hello">揮手打招呼</button><button class="btn" data-effect="story">接一個文化梗</button><button class="btn primary" data-effect="spark">送出靈感星 ✳</button></div><p class="fine">鏡頭只在本機顯示，不錄影、不上傳。角色為程式繪製的 3D 風格預設特效；尚未接入即時生成、語音或動捕。</p>
+          <div class="panel presence-panel"><div class="panel-heading"><h3>真人參與規則，透明地演示</h3><span class="tag">DEMO ONLY</span></div><div class="form-row"><label>主持方式<select id="host-mode"><option value="human">真人主持</option><option value="human_with_ai">真人主持＋AI 特效</option><option value="unattended">無人值守數字人</option></select></label><button class="btn" id="policy-button">查看入駐規則</button></div><p id="policy-result" class="fine" aria-live="polite">規則依主持方式聲明運作，不分析音影片。</p><div class="challenge-row"><button class="btn" id="challenge-button">領取互動挑戰</button><span id="challenge-phrase" class="challenge-phrase"></span></div><form id="challenge-form" class="form-row" hidden><label>輸入上方挑戰文字<input id="challenge-answer" maxlength="40" autocomplete="off" required></label><button class="btn" type="submit">提交挑戰</button></form><p id="challenge-result" class="fine" aria-live="polite">演示文字挑戰不能證明真人身分；正式服務需人工覆核與申訴。</p></div>
+        </div><aside class="panel script-panel"><div class="panel-heading"><h2>給真人的提詞卡</h2><span class="tag">AI ASSIST</span></div><div id="host-script"></div><a class="btn primary wide" href="#insights">記錄這次測款反饋 →</a></aside></div>
+      </div>
+    </section>
+
+    <section id="page-insights" class="page" hidden>
+      <div class="page-heading"><div><div class="eyebrow">FEEDBACK BECOMES AN ASSET / 03</div><h1>每一次回應，都讓下一版更好。</h1><p>保留修改原因與觀察依據，讓品牌能決定下一步。</p></div></div>
+      <div id="insights-empty" class="empty-state compact"><h2>一個故事，一次小實驗。</h2><p>第一個付費假設：海外文化品牌為「一份可執行、可復盤的中國測款提案」付費。<br>先創建提案，再記錄現場觀察。</p><a href="#studio" class="btn primary">開始第一份提案 →</a></div>
+      <div id="insights-content" hidden><div id="insight-metrics" class="metrics"></div><div class="insights-grid"><form id="observation-form" class="panel"><div class="panel-heading"><h2>記錄一次觀察</h2><span class="tag">手動演示資料</span></div><div class="form-row"><label>对应试讲场次<select name="sessionId" id="observation-session" required></select></label><label>渠道<select name="channel"><option value="campus">校園試講</option><option value="live">直播試講</option></select></label><label>觀察類型<select name="decision"><option value="interested">表示有興趣</option><option value="price_high">覺得價格偏高</option><option value="unclear">沒理解文化故事</option></select></label></div><label>原話或具體情境<textarea name="note" maxlength="500" rows="4" required placeholder="例如：觀眾想知道圖案是否由創作者親自設計。請勿輸入他人個人資料。"></textarea></label><button class="btn primary" type="submit">保存觀察 →</button><p class="fine">每條代表一次錄入，可重複；不等於獨立人數、訂單或成交率。</p></form><div class="panel"><div class="panel-heading"><h2>這一版學到了什麼</h2><span class="tag" id="insight-version"></span></div><div id="observation-list"></div></div></div><div class="panel revisions-panel"><div class="panel-heading"><h2>人改過的地方，留下來</h2><a href="#studio" class="text-link">修改提案 →</a></div><div id="revision-list"></div><p class="fine">當前能力：保存並沿用此項目的修訂；跨項目檢索與模型訓練尚未接入。</p></div></div>
+    </section>
+
+    <section id="page-architecture" class="page" hidden>
+      <div class="page-heading"><div><div class="eyebrow">BEHIND THE CREATION</div><h1>人做決定，Agent 把工作串起來。</h1><p>同一個項目，從需求到交付，再把反饋留在下一版裡。</p></div><span class="tag">可點選各角色</span></div>
+      <div class="architecture panel"><div class="arch-row"><div class="arch-node">創作者 / 品牌<span>故事、目標人群、預算</span></div><span class="arrow">→</span><div class="arch-node">共創工作台<span>需求、修改、真人舞台、測款</span></div></div><div class="arch-line">↓</div><div class="meta-node"><b>Meta Agent · 有邊界的流程協調器</b><span>固定步驟 · 結構驗證 · 狀態追蹤 · 失敗停止 · 人工確認</span></div><div class="arch-line">↓</div><div id="arch-agents" class="arch-agents"></div><div class="agent-detail" id="agent-detail" aria-live="polite"></div><div class="arch-line">↓</div><div class="arch-row bottom-row"><div class="arch-node">模型網關<span>Mock / OpenAI-compatible<br>密鑰留在服務端</span></div><div class="arch-node">項目與反饋資料<span>本機 JSON · 修訂版本<br>來源 / 修改 / 負責人</span></div><div class="arch-node">創作者確認<span>當前版本簽收 → 本地演示<br>修改後重新確認</span></div></div></div>
+      <div class="scope-grid"><div><span class="eyebrow">現在可以體驗</span><h3>共創 → 確認 → 真人舞台 → 反饋</h3><p>可運行接口與狀態機、本地持久化、結構化模型適配、修訂與觀察記錄。</p></div><div><span class="eyebrow">下一階段接入</span><h3>真實品牌、樣品與受眾證據</h3><p>帳號權限、資料庫、供應商實際詢價、直播 SDK、經授權的反饋檢索與評估。</p></div><div><span class="eyebrow">驗證後再擴張</span><h3>從一次測款，走向跨境落地</h3><p>品牌服務與雙向供應鏈逐步延伸；此版本不提供交易、徵信預測或數字人自動識別。</p></div></div>
+    </section>
+  </main>
+  <footer><a class="brand" href="#discover">來物 <small>LAIWU</small></a><span>讓普通人的創造，被看見。</span><a href="#architecture" data-page="architecture">关于技术与 Agent 架构 ↗</a><span>牛客松 2026 · Wild Creation</span></footer>
+  <div id="toast" role="status" hidden></div>
+</body>
+</html>
