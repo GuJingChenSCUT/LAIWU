@@ -1,7 +1,10 @@
 import { randomUUID } from 'node:crypto';
 import { AppError } from './contracts.mjs';
+import { isItalia, italianProducts, feedbackDimensions } from './italia-data.mjs';
+import { ensureItalia, invalidateItalia, pilotReleaseIssues, pilotPreflight, publicationValid, mutateItalia, pilotTasks, pilotReport } from './italia.mjs';
 
 export const businessRoutes = [
+  { id: 'IT', name: '意大利原产商品展示测试', en: 'Italian original-product market test', phase: 'Italia 首轮', description: '米兰作为品牌接洽地，深圳作为测试地；商品实际制造地单独核对。', fields: ['商品档案', '原文与译审', '展示确认', '四维反馈'], todo: '仅做原商品的展示与反馈测试；暂停纺织配饰共创，不开展中国授权生产或进口办理。' },
   { id: 'R0', name: '文化概念测款', en: 'Concept test', phase: '本轮主线', description: '先验证故事与概念是否被理解，再决定是否打样。', fields: ['文化来源', '展示范围', '观众反馈'], todo: '明确谁提供素材、谁确认讲述、谁决定下一轮。' },
   { id: 'R1', name: '国内共创', en: 'Co-create in China', phase: '询价演练', description: '海外文化与设计参与，中国供应链打样；品牌来源与生产地分别记录。', fields: ['生产地', '销售主体', '规格与样品'], todo: '先冻结尺寸、材料、工艺与验收标准，再询价；采购需另签合同。' },
   { id: 'R2', name: '一般贸易进口', en: 'General import', phase: '资料清单', description: '海外成品进入中国，先确定商品类别与进口责任方。', fields: ['原产地', '发货地', '进口主体'], todo: '由专业人员核对商品归类、标签、检验要求与落地费用，当前仅整理需求。' },
@@ -23,7 +26,8 @@ export const demoRoles = [
   { id: 'culture', name: '文化创作者', en: 'Creator', org: '素材提供方 · 演示身份', job: '核对来源与使用范围' },
   { id: 'supplier', name: '供应商', en: 'Supplier', org: '共创工坊 · 演示身份', job: '核对规格，提交询价回复' },
   { id: 'host', name: '真人主播', en: 'Host', org: '来物演示舞台 · 演示身份', job: '确认双语讲稿，主持试讲' },
-  { id: 'audience', name: '体验观众', en: 'Audience', org: '本机观众预览', job: '了解故事，表达看法' }
+  { id: 'audience', name: '体验观众', en: 'Audience', org: '本机观众预览', job: '了解故事，表达看法' },
+  { id: 'reviewer', name: '展示确认', en: 'Review', org: '展示确认 · 演示视角', job: '核对版本与用途，处理展示问题' }
 ];
 const now = () => new Date().toISOString();
 function fail(code, message, status = 422) { throw new AppError(code, message, status); }
@@ -43,12 +47,14 @@ export function ensureBusiness(p) {
     rights: { state: 'pending', display: false, sample: false, credit: '', evidence: '', expiresAt: null, scope: '本地演示；非真实授权' },
     confirmations: [], translation: 'pending', spec: null, quotes: [], sample: null, sessions: [], decisions: [], audit: [], receipts: []
   };
+  ensureItalia(p);
   return p.business;
 }
 export function invalidateBusiness(p, reason) {
   const b = ensureBusiness(p);
   b.confirmations.forEach(c => { if (!c.invalidatedAt) { c.invalidatedAt = now(); c.reason = reason; } });
   b.translation = 'pending';
+  invalidateItalia(p);
   p.status = 'awaiting_review'; p.approval = null;
 }
 export function rightsValid(b, purpose = 'display') {
@@ -65,6 +71,7 @@ export function releaseIssues(p) {
   if (!hasConfirmation(p, 'brand')) issues.push('品牌方确认此版展示内容');
   if (!hasConfirmation(p, 'script') || b.translation !== 'reviewed') issues.push('主播核对中文与英文讲稿');
   if (!['awaiting_review', 'demo_ready'].includes(p.status)) issues.push('等待共创生成完成');
+  issues.push(...pilotReleaseIssues(p));
   return issues;
 }
 export function quoteReadiness(b, quote) {
@@ -83,6 +90,7 @@ export function quoteReadiness(b, quote) {
 }
 export function businessTasks(p) {
   const b = ensureBusiness(p);
+  if (isItalia(p)) return pilotTasks(p);
   return [
     { id: 'brief', owner: 'brand', name: '补齐项目边界', output: '来源 / 生产地 / 卖方责任', done: !Object.entries(b.profile).some(([key, value]) => key !== 'confirmer' && value === '待确认'), next: '文化创作者', tab: 'overview' },
     { id: 'rights', owner: 'culture', name: '确认文化与素材范围', output: '本地展示记录 + 署名', done: rightsValid(b) && hasConfirmation(p, 'culture'), next: '品牌方与主播', tab: 'rights' },
@@ -96,7 +104,7 @@ export function businessTasks(p) {
 }
 
 // These are demo workflow roles, not authenticated identities. The whole app is localhost-only.
-const permissions = { profile: ['brand'], rights: ['culture'], confirm: ['culture', 'brand', 'host'], spec: ['brand'], quote: ['supplier'], sample: ['brand'], session: ['host'], closeSession: ['host'], decision: ['brand'] };
+const permissions = { profile: ['brand'], rights: ['culture'], confirm: ['culture', 'brand', 'host'], spec: ['brand'], quote: ['supplier'], sample: ['brand'], session: ['host'], closeSession: ['host'], decision: ['brand'], dossier: ['brand'], translationReview: ['culture'], releaseReview: ['reviewer'], incident: ['host', 'reviewer'], resolveIncident: ['reviewer'] };
 export function mutateBusiness(p, action, input) {
   const b = ensureBusiness(p);
   if (!Object.hasOwn(permissions, action)) fail('NOT_FOUND', '未知业务动作', 404);
@@ -109,6 +117,8 @@ export function mutateBusiness(p, action, input) {
   if (!['awaiting_review', 'demo_ready'].includes(p.status)) fail('NOT_READY', '请先完成共创生成', 409);
   if (b.receipts.length >= 500) fail('LIMIT', '此演示项目已达到操作上限', 409);
   let message;
+  if (isItalia(p) && ['profile', 'spec', 'quote', 'sample'].includes(action)) fail('ITALIA_SCOPE', '本轮只做原产商品展示与反馈测试，生产询价与打样已暂停');
+  if (['dossier', 'translationReview', 'releaseReview', 'incident', 'resolveIncident'].includes(action)) message = mutateItalia(p, action, input, invalidateBusiness);
   if (action === 'profile') {
     if (!businessRoutes.some(r => r.id === input.route)) fail('INVALID_ROUTE', '请选择业务路径');
     const profile = {};
@@ -118,6 +128,7 @@ export function mutateBusiness(p, action, input) {
     message = '品牌更新项目边界；展示确认需重新签收';
   }
   if (action === 'rights') {
+    if (isItalia(p) && input.sample === true) fail('ITALIA_SCOPE', '本轮不开放打样或生产用途');
     if (!['limited', 'withdrawn'].includes(input.state)) fail('INVALID_RIGHTS', '请选择演示展示范围或撤回');
     const rights = { state: input.state, display: input.display === true, sample: input.sample === true, credit: text(input.credit, '署名', 120), evidence: text(input.evidence, '来源与依据'), expiresAt: text(input.expiresAt, '有效期', 40), scope: '本地演示；非真实授权' };
     if (!Number.isFinite(Date.parse(rights.expiresAt)) || (rights.state === 'limited' && Date.parse(rights.expiresAt) <= Date.now())) fail('EXPIRY', '有效期应晚于现在');
@@ -176,9 +187,14 @@ export function mutateBusiness(p, action, input) {
   }
   if (action === 'session') {
     const issues = releaseIssues(p); if (issues.length) fail('REVIEW_REQUIRED', issues.join('；'), 409);
-    if (!['R0', 'R1'].includes(b.route)) fail('ROUTE_SCOPE', '当前路径尚未开放试讲，请先完成专业业务核查');
+    if (!['R0', 'R1', 'IT'].includes(b.route)) fail('ROUTE_SCOPE', '当前路径尚未开放试讲，请先完成专业业务核查');
     if (b.sessions.some(s => s.state === 'open' && s.contentRevision === p.revision)) fail('SESSION_OPEN', '此版本已有反馈窗口开放的场次', 409);
     const session = { id: randomUUID(), number: b.sessions.length + 1, contentRevision: p.revision, state: 'open', createdAt: now(), feedbackUntil: new Date(Date.now() + 86400000).toISOString(), snapshot: { title: p.outputs.design.title, tagline: p.outputs.design.tagline, concept: p.outputs.design.concept, story: p.brief.story, country: p.brief.country, productType: p.brief.productType, palette: p.outputs.design.palette, materials: p.outputs.design.materials, host: structuredClone(p.outputs.host), profile: structuredClone(b.profile), credit: b.rights.credit, targetRetailPrice: p.brief.targetRetailPrice ?? p.brief.budget } };
+    if (isItalia(p)) {
+      session.snapshot.italia = { dossier: structuredClone(b.italia.dossier), publication: structuredClone(b.italia.publication), productId: p.brief.productId, photo: italianProducts.find(x => x.id === p.brief.productId).photo };
+      session.snapshot.story = b.italia.dossier.chineseStory;
+      session.feedbackUntil = new Date(Math.min(Date.parse(session.feedbackUntil), Date.parse(b.italia.publication.expiresAt), Date.parse(b.rights.expiresAt))).toISOString();
+    }
     b.sessions.push(session); p.status = 'demo_ready'; p.approval = { owner: '品牌 / 文化 / 主播演示角色', revision: p.revision, at: now(), scope: 'local-demo-only' };
     message = `主播建立场次 ${session.number}，冻结内容 v${p.revision}；反馈窗口 24 小时`;
   }
@@ -203,23 +219,27 @@ export function recordSessionObservation(p, input) {
   if (!session) fail('SESSION_NOT_FOUND', '请选择已建立的试讲场次', 404);
   if (session.state !== 'open' || Date.parse(session.feedbackUntil) <= Date.now()) fail('WINDOW_CLOSED', '此场次反馈窗口已关闭', 409);
   if (!rightsValid(b)) fail('RIGHTS_REQUIRED', '素材范围已撤回或到期，暂不接受新的体验反馈', 409);
+  if (isItalia(p) && (!session.snapshot.italia?.publication || Date.parse(session.snapshot.italia.publication.expiresAt) <= Date.now() || session.scopeWithdrawn || b.italia.incidents.some(x => x.state === 'open'))) fail('PUBLICATION_CLOSED', '此版本展示已暂停或到期');
   const key = text(input.requestId, '反馈编号', 80);
   const note = text(input.note, '反馈内容', 500);
   if (!['interested', 'price_high', 'unclear'].includes(input.decision) || !['campus', 'live'].includes(input.channel)) fail('INVALID_INPUT', '未知反馈类型');
   const useCase = text(input.useCase, '使用场景', 80, true);
+  const dimension = isItalia(p) ? input.dimension : undefined;
+  const experience = isItalia(p) ? input.experience : undefined;
+  if (isItalia(p) && (!Object.hasOwn(feedbackDimensions, dimension) || !['visual-only', 'sample-experienced'].includes(experience))) fail('FEEDBACK_DIMENSION', '请选择反馈维度，以及是否实际体验过商品');
   const previous = p.observations.find(o => o.requestId === key);
   if (previous) {
-    if (previous.sessionId !== session.id || previous.note !== note || previous.decision !== input.decision || previous.channel !== input.channel || previous.useCase !== useCase) fail('IDEMPOTENCY_CONFLICT', '反馈编号已用于其他内容', 409);
+    if (previous.sessionId !== session.id || previous.note !== note || previous.decision !== input.decision || previous.channel !== input.channel || previous.useCase !== useCase || previous.dimension !== dimension || previous.experience !== experience) fail('IDEMPOTENCY_CONFLICT', '反馈编号已用于其他内容', 409);
     return p;
   }
   if (p.observations.length >= 200) fail('LIMIT', '此项目最多保留 200 条体验反馈', 409);
-  p.observations.push({ id: randomUUID(), requestId: key, sessionId: session.id, revision: session.contentRevision, contentRevision: session.contentRevision, channel: input.channel, decision: input.decision, note, useCase, source: 'local-audience-demo', at: now() });
+  p.observations.push({ id: randomUUID(), requestId: key, sessionId: session.id, revision: session.contentRevision, contentRevision: session.contentRevision, channel: input.channel, decision: input.decision, note, useCase, ...(isItalia(p) ? { dimension, experience } : {}), source: 'local-audience-demo', at: now() });
   p.updatedAt = now(); return p;
 }
 
 export function businessView(p) {
   const b = ensureBusiness(p);
   const { receipts, ...visible } = b;
-  const allowed = rightsValid(b);
-  return { ...visible, sessions: b.sessions.map(s => ({ ...s, snapshot: allowed && !s.scopeWithdrawn ? s.snapshot : null })), tasks: businessTasks(p), releaseIssues: releaseIssues(p), rightsValid: allowed, quotes: b.quotes.map(q => ({ ...q, comparison: quoteReadiness(b, q) })), demoNotice: '角色切换仅为本机流程演示；未实现登录或账号数据隔离' };
+  const allowed = rightsValid(b) && (!isItalia(p) || !b.italia.incidents.some(x => x.state === 'open'));
+  return { ...visible, ...(isItalia(p) ? { italia: { ...b.italia, issues: pilotPreflight(p), canPresent: allowed && publicationValid(p), report: pilotReport(p) } } : {}), sessions: b.sessions.map(s => ({ ...s, snapshot: allowed && !s.scopeWithdrawn && (!isItalia(p) || Date.parse(s.snapshot.italia?.publication.expiresAt) > Date.now()) ? s.snapshot : null })), tasks: businessTasks(p), releaseIssues: releaseIssues(p), rightsValid: allowed, quotes: b.quotes.map(q => ({ ...q, comparison: quoteReadiness(b, q) })), demoNotice: '角色切换仅为本机流程演示；未实现登录或账号数据隔离' };
 }

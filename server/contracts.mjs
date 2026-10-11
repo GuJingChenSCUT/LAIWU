@@ -1,3 +1,5 @@
+import { ITALIA_EDITION, italianProducts } from './italia-data.mjs';
+
 export class AppError extends Error {
   constructor(code, message, status = 400) {
     super(message);
@@ -42,9 +44,14 @@ export function validateBrief(input) {
   // Preserve compatibility with earlier drafts without requiring personal ownership details.
   if (input.owner !== undefined && (typeof input.owner !== 'string' || input.owner.length > 60)) throw new AppError('INVALID_INPUT', '创作署名需为不超过 60 字的文字');
   result.owner = input.owner?.trim() || '共创者';
-  if (!['陶瓷杯', '帆布袋', '裝飾燈'].includes(result.productType)) throw new AppError('INVALID_INPUT', '請選擇支援的商品類型');
+  if (input.edition === ITALIA_EDITION) {
+    const product = italianProducts.find(p => p.id === input.productId && p.productType === result.productType);
+    if (!product) throw new AppError('INVALID_INPUT', '请选择本轮四类意大利商品之一');
+    result.edition = ITALIA_EDITION; result.productId = product.id; result.country = '意大利';
+  } else if (!['陶瓷杯', '帆布袋', '裝飾燈'].includes(result.productType)) throw new AppError('INVALID_INPUT', '請選擇支援的商品類型');
   const price = input.targetRetailPrice ?? input.budget;
-  if (typeof price !== 'number' || !Number.isFinite(price) || price < 50 || price > 500) throw new AppError('INVALID_INPUT', '單件目標售價需為 50–500 元');
+  const minPrice = result.edition ? 1 : 50, maxPrice = result.edition ? 5000 : 500;
+  if (typeof price !== 'number' || !Number.isFinite(price) || price < minPrice || price > maxPrice) throw new AppError('INVALID_INPUT', `單件測試售價需為 ${minPrice}–${maxPrice} 元`);
   result.targetRetailPrice = price;
   result.budget = price; // Legacy adapter alias; this is not a project budget.
   return result;

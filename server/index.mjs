@@ -9,10 +9,13 @@ import { createProject, runWorkflow, approveProject, exportProject, recordCorrec
 import { createStore } from './storage.mjs';
 import { createChallenge, verifyChallenge, assessDeclaration } from './presence.mjs';
 import { ensureBusiness, businessView, mutateBusiness, businessRoutes, knowledgeCards, demoRoles, rightsValid } from './business.mjs';
+import { italianProducts, dossierFields, feedbackDimensions } from './italia-data.mjs';
 
 const publicDir = new URL('../public/', import.meta.url);
 const allowedFiles = new Map([['/', ['index.html', 'text/html']], ['/index.html', ['index.html', 'text/html']], ['/app.js', ['app.js', 'text/javascript']], ['/work.js', ['work.js', 'text/javascript']], ['/styles.css', ['styles.css', 'text/css']], ['/work.css', ['work.css', 'text/css']]]);
 for (const name of ['mediterranean', 'north-africa', 'latin-america']) allowedFiles.set(`/images/${name}.jpg`, [`images/${name}.jpg`, 'image/jpeg']);
+for (const p of italianProducts) allowedFiles.set(p.photo, [`images/${p.image}`, 'image/jpeg']);
+for (const [name, type] of [['italia.js', 'text/javascript'], ['italia.css', 'text/css']]) allowedFiles.set(`/${name}`, [name, type]);
 allowedFiles.set('/images/mediterranean-blue.png', ['images/mediterranean-blue.png', 'image/png']);
 const projectResponse = p => ({ ...p, business: businessView(p) });
 
@@ -58,8 +61,8 @@ export function createApp({ provider = createProvider(), delayMs = DEFAULT_STEP_
         const [name, type] = allowedFiles.get(path);
         return send(200, await readFile(new URL(name, publicDir)), type);
       }
-      if (req.method === 'GET' && path === '/api/health') return send(200, { ok: true, mode: provider.mode, model: provider.model, persistence: dataPath ? 'local-json' : 'memory', version: '0.2.0' });
-      if (req.method === 'GET' && path === '/api/catalog') return send(200, { seeds, agents: agentDefinitions, routes: businessRoutes, knowledge: knowledgeCards, roles: demoRoles, notice: '人物、故事、商品概念與供應數字為演示資料。靈感卡片照片由使用者提供，僅作視覺參考。' });
+      if (req.method === 'GET' && path === '/api/health') return send(200, { ok: true, mode: provider.mode, model: provider.model, persistence: dataPath ? 'local-json' : 'memory', version: '0.3.0' });
+      if (req.method === 'GET' && path === '/api/catalog') return send(200, { seeds, agents: agentDefinitions, routes: businessRoutes, knowledge: knowledgeCards, roles: demoRoles, dossierFields, feedbackDimensions, notice: 'Italia 原产商品展示与反馈测试。照片由团队提供，品牌合作与商品事实待核对；当前为本地演示。' });
       if (req.method === 'POST' && path === '/api/projects') {
         if (active >= 3) throw new AppError('BUSY', '工作流忙碌中，請稍後重試', 429);
         const project = createProject(await readJson(req), provider.mode);

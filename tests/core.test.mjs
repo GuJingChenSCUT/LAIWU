@@ -7,7 +7,7 @@ import { createProvider, mockResult } from '../server/providers.mjs';
 import { createProject, runWorkflow, approveProject, recordCorrection, recordObservation } from '../server/workflow.mjs';
 import { createChallenge, verifyChallenge } from '../server/presence.mjs';
 import { schemas, validateSchema, validateBrief } from '../server/contracts.mjs';
-import { seeds } from '../server/data.mjs';
+import { legacySeeds as seeds } from '../server/data.mjs';
 import { createApp } from '../server/index.mjs';
 import { createStore } from '../server/storage.mjs';
 

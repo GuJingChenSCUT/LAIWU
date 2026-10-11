@@ -1,4 +1,5 @@
 import { createWorkspace } from './work.js';
+import { italianProposal, isItalianProject } from './italia.js';
 const $ = selector => document.querySelector(selector);
 const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const e = escapeHtml;
@@ -50,6 +51,8 @@ function route() {
 function fillSeed(id) {
   const seed = catalog.seeds.find(s => s.id === id) || catalog.seeds[0];
   for (const field of ['country', 'story', 'craft', 'audience', 'productType', 'budget']) $('#brief-form').elements[field].value = seed[field];
+  $('#brief-form').elements.edition.value = seed.edition;
+  $('#brief-form').elements.productId.value = seed.productId;
   $('#seed-select').value = seed.id;
 }
 
@@ -57,7 +60,7 @@ function renderSteps() {
   const steps = project?.trace || catalog.agents.map(a => ({ ...a, status: 'pending' }));
   const clock = value => new Date(value).toLocaleTimeString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false });
   const time = value => `<time datetime="${e(value)}">${e(clock(value))}</time>`;
-  const hints = { culture: '從你的故事裡，找到值得留下的細節', design: '讓文化元素遇見材料、形狀與工藝', supply: '看看示例成本、起訂量與待詢價事項', host: '準備雙語開場，把自由發揮留給你', review: '梳理來源、素材使用範圍與待確認事項' };
+  const hints = { culture: '保留原文、来源与具体地区，区分事实与待核对事项', design: '保持原商品，准备面向深圳消费者的展示与问题', supply: '整理标签、制造地、规格和成分的待补资料', host: '准备双语开场，把真实表达留给真人', review: '检查资料缺项，交由人工确认版本与展示范围' };
   const labels = { pending: '等待開始', running: '進行中', completed: '已完成', failed: '未完成' };
   $('#agent-steps').innerHTML = steps.map((s, i) => {
     const name = catalog.agents.find(a => a.id === s.id)?.name || s.name;
@@ -80,7 +83,9 @@ function renderProject() {
   if (project.status === 'failed') {
     $('#proposal').innerHTML = `<div class="error-box" role="alert"><h3>這次共創還未完成</h3><p>${e(project.error.message)}</p><small>${e(project.error.code)} · 可調整左側需求後重新生成</small></div>`;
   } else if (['queued', 'running'].includes(project.status)) {
-    $('#proposal').innerHTML = '<div class="empty-state"><div class="empty-art">✳</div><h2>讓文化與工藝，<br>慢慢找到彼此。</h2><p>完成後會交給你確認，過程可在上方查看。</p></div>';
+    $('#proposal').innerHTML = '<div class="empty-state"><div class="empty-art">✳</div><h2>让商品与故事，<br>准备好第一次相遇。</h2><p>完成後會交給你確認，過程可在上方查看。</p></div>';
+  } else if (isItalianProject(project)) {
+    $('#proposal').innerHTML = italianProposal(project, catalog, e);
   } else {
     $('#proposal').innerHTML = `<div class="panel"><div class="proposal-hero"><div class="art-wrap">${productArt(project.brief.productType, o.design.palette[0])}<small>程式繪製概念示意 · 非商品實拍</small></div><div><div class="eyebrow">${e(project.brief.country)} × ${e(project.brief.craft)}</div><h2>${e(o.design.title)}</h2><p>${e(o.design.tagline)}</p><div class="swatches">${o.design.palette.map(c => `<i style="background:${c}" title="${c}"></i>`).join('')}</div></div></div><div class="proposal-section"><h3>把故事變成產品</h3><p>${e(o.design.concept)}</p><p>材料提案：${o.design.materials.map(e).join('、')}</p></div><div class="proposal-section"><h3>文化有來處</h3><p>${e(o.culture.interpretation)}</p><ul>${o.culture.cautions.map(x => `<li>${e(x)}</li>`).join('')}</ul></div><div class="proposal-section"><h3>先算一筆小帳 <span class="tag">非實際報價</span></h3><div class="cost-grid"><div><span>單件示例成本</span><strong>¥${o.supply.costMin}–${o.supply.costMax}</strong></div><div><span>目標售價</span><strong>¥${o.supply.targetPrice}</strong></div><div><span>示例起訂量</span><strong>${o.supply.moq} 件</strong></div></div><p>示例交期 ${e(o.supply.leadDays)} 天。未扣除${o.supply.excluded.map(e).join('、')}；需向真實供應商確認。</p></div><div class="review-box"><p class="fine">和文化创作者、品牌及主播一起确认这份提案，再带着它开始询价或试讲。修改内容后，记得一起核对新版。</p><a href="#work" class="btn primary wide">一起完善这份提案 →</a></div><details class="edit-details"><summary>讓這份提案，更像你的故事</summary><form id="correction-form"><label>修改位置<select name="target"><option value="tagline">商品標語</option><option value="openingZh">中文主播開場</option></select></label><label>修改後內容<textarea name="replacement" maxlength="1500" rows="3" required></textarea></label><label>為什麼這樣改？<input name="reason" maxlength="500" required placeholder="例如：保留個人故事，避免代言整個國家的文化"></label><button class="btn" type="submit">保存修訂並重新確認</button></form></details></div>`;
   }
@@ -90,7 +95,7 @@ function renderProject() {
 }
 
 function renderLive() {
-  const ready = project?.status === 'demo_ready' && project?.business?.rightsValid && project.business.sessions.some(s => s.contentRevision === project.revision);
+  const ready = project?.status === 'demo_ready' && project?.business?.rightsValid && (!isItalianProject(project) || project.business.italia.canPresent) && project.business.sessions.some(s => s.contentRevision === project.revision && s.snapshot);
   $('#live-locked').hidden = ready;
   $('#live-content').hidden = !ready;
   if (!ready) { stopCamera(); return; }
@@ -112,7 +117,7 @@ function renderInsights() {
   const sessions = project.business?.sessions || [];
   $('#observation-session').innerHTML = sessions.length ? sessions.map(s => `<option value="${s.id}">试讲 ${s.number} / v${s.contentRevision}${s.state === 'closed' ? '（已关闭）' : ''}</option>`).join('') : '<option value="">先建立试讲场次</option>';
   $('#observation-form button').disabled = !sessions.some(s => s.state === 'open' && Date.parse(s.feedbackUntil) > Date.now()) || !project.business?.rightsValid;
-  $('#observation-list').innerHTML = obs.length ? obs.slice(-6).reverse().map(x => `<div class="observation"><small>${x.channel === 'campus' ? '校園' : '直播'} · ${x.sessionId ? '场次 ' + e(x.sessionId.slice(0, 8)) : '旧版手动记录'} · v${x.revision} · ${decisions[x.decision]}</small><p>${e(x.note)}</p></div>`).join('') : '<p>還沒有觀察記錄。先邀請觀眾聽一段故事，再記下他們的原話。</p><p class="fine">先建立试讲场次；记录始终属于该场次版本。</p>';
+  $('#observation-list').innerHTML = obs.length ? obs.slice(-6).reverse().map(x => `<div class="observation"><small>${x.channel === 'campus' ? '现场访谈' : '直播试讲'} · ${x.sessionId ? '场次 ' + e(x.sessionId.slice(0, 8)) : '旧版手动记录'} · v${x.revision} · ${decisions[x.decision]}${x.dimension ? ' · ' + e(catalog.feedbackDimensions[x.dimension]) + ' · ' + (x.experience === 'sample-experienced' ? '自述实物体验' : '仅图文讲述') : ''}</small><p>${e(x.note)}</p></div>`).join('') : '<p>還沒有觀察記錄。先邀請觀眾聽一段故事，再記下他們的原話。</p><p class="fine">先建立试讲场次；记录始终属于该场次版本。</p>';
   $('#revision-list').innerHTML = project.feedback.length ? project.feedback.slice(-6).reverse().map(x => `<div class="observation"><small>v${x.revision} · ${x.target === 'tagline' ? '商品標語' : '中文開場'}</small><p><del>${e(x.before)}</del></p><p>${e(x.after)}</p><p>修改原因：${e(x.reason)}</p></div>`).join('') : '<p class="fine">尚無修訂。在共創提案下方可修改標語或中文開場，保存後會重新進入確認環節。</p>';
 }
 
@@ -202,7 +207,7 @@ document.addEventListener('click', async event => {
 });
 
 document.addEventListener('change', event => {
-  if (event.target.id === 'seed-select') fillSeed(event.target.value);
+    if (event.target.id === 'seed-select') fillSeed(event.target.value);
   if (event.target.id === 'review-ack') $('#approve-button').disabled = !event.target.checked;
 });
 
@@ -232,6 +237,28 @@ document.addEventListener('submit', async event => {
 window.addEventListener('hashchange', route);
 window.addEventListener('pagehide', stopCamera);
 
+// Refresh access while a presentation is visible so expiry or a withdrawal in another
+// tab cannot leave a previously approved image or script on screen indefinitely.
+let checkingPresentation = false;
+const accessKey = p => JSON.stringify([p.status, p.revision, p.business.version, p.business.rightsValid, p.business.italia?.canPresent, p.business.sessions.map(s => [s.id, s.state, !!s.snapshot])]);
+async function refreshPresentationAccess() {
+  if (checkingPresentation || busy || !isItalianProject(project) || document.hidden || !['#live', '#work/audience'].includes(location.hash)) return;
+  checkingPresentation = true;
+  const id = project.id;
+  try {
+    const latest = await api(`/api/projects/${id}`);
+    if (project?.id === id && accessKey(latest) !== accessKey(project)) { project = latest; renderProject(); }
+  } catch {
+    if (project?.id === id) {
+      stopCamera(); project.business.italia.canPresent = false;
+      project.business.sessions.forEach(s => { s.snapshot = null; });
+      renderProject();
+    }
+  } finally { checkingPresentation = false; }
+}
+setInterval(refreshPresentationAccess, 3000);
+window.addEventListener('focus', refreshPresentationAccess);
+
 async function boot() {
   route();
   try {
@@ -241,15 +268,16 @@ async function boot() {
     $('#mode-pill').textContent = health.mode === 'mock' ? '免密鑰演示' : '模型已配置';
     $('#provider-note').textContent = health.mode === 'mock' ? '演示模式使用本地模板，不發送模型請求。資料保存在本機。' : '真實模型模式：故事與創作需求會傳送至服務端配置的模型服務商。';
     $('#seed-select').innerHTML = data.seeds.map(seed => `<option value="${seed.id}">${e(seed.country)} · ${e(seed.productType)}</option>`).join('');
-    $('#seed-grid').innerHTML = data.seeds.map(seed => `<article class="seed-card"><div class="seed-art seed-photo-${e(seed.id)}"><img class="seed-photo" src="${e(seed.photo)}" alt="${e(seed.photoAlt)}" loading="lazy" decoding="async"><span class="tag">${e(seed.region)}</span><small class="photo-caption">用户提供 · 灵感参考图</small></div><div class="seed-body"><div class="eyebrow">${e(seed.creator)} 的文化來信 / 虛構示例</div><h3>${e(seed.title)}</h3><p>${e(seed.subtitle)}</p><div class="seed-meta"><span>概念商品 · 待共創</span><button class="btn" data-start="${seed.id}">用這個靈感 ↗</button></div></div></article>`).join('');
+    $('#seed-grid').innerHTML = data.seeds.map(seed => `<article class="seed-card"><div class="seed-art seed-photo-${e(seed.id)}"><img class="seed-photo" src="${e(seed.photo)}" alt="${e(seed.photoAlt)}" loading="lazy" decoding="async"><span class="tag">${e(seed.en)}</span><small class="photo-caption">团队提供 · 商品参考实拍</small></div><div class="seed-body"><div class="eyebrow">${e(seed.original)} / ITALIA</div><h3>${e(seed.title)}</h3><p>${e(seed.subtitle)}</p><div class="seed-meta"><span>资料待核对 · 展示测试</span><button class="btn" data-start="${seed.id}">用这件商品开始 ↗</button></div></div></article>`).join('');
     $('#arch-agents').innerHTML = data.agents.map((agent, i) => `<button data-agent="${agent.id}" class="${i === 0 ? 'selected' : ''}" aria-pressed="${i === 0}">${e(agent.name)}<small>${e(agent.role)}</small></button>`).join('');
     $('#agent-detail').textContent = data.agents[0].description;
-    fillSeed('italy'); renderSteps();
+    fillSeed('pistachio'); renderSteps();
     let lastId;
     try { lastId = localStorage.getItem('laiwu-project-id'); } catch { /* Optional convenience. */ }
     if (lastId && /^[a-f0-9-]{36}$/.test(lastId)) {
       try {
         project = await api(`/api/projects/${lastId}`);
+        if (!isItalianProject(project)) { project = null; toast('旧提案仍保存在本机。这一轮从 Italia 原商品开始。'); return; }
         for (const [key, value] of Object.entries(project.brief)) if ($('#brief-form').elements[key]) $('#brief-form').elements[key].value = value;
         renderProject();
         if (['queued', 'running'].includes(project.status)) { busy = true; $('#generate-button').disabled = true; try { await pollProject(lastId); } finally { busy = false; $('#generate-button').disabled = false; } }

@@ -2,6 +2,8 @@ import { randomUUID } from 'node:crypto';
 import { agentDefinitions, pricing } from './data.mjs';
 import { AppError, validateBrief } from './contracts.mjs';
 import { ensureBusiness, invalidateBusiness, recordSessionObservation } from './business.mjs';
+import { ITALIA_EDITION, isItalia } from './italia-data.mjs';
+import { pilotReport } from './italia.mjs';
 
 export const DEFAULT_STEP_DELAY_MS = 2000;
 
@@ -10,6 +12,7 @@ export function createProject(input, mode) {
 }
 
 export function estimateSupply(brief) {
+  if (brief.edition === ITALIA_EDITION) return { kind: 'product-facts', label: '商品原始资料待核对', missing: ['具体地区与实际制造地', '规格、配料或成分', '标签、品牌来源与使用说明', '供应、进口与真实销售条件'], targetPrice: brief.targetRetailPrice, costMin: null, costMax: null, moq: null, leadDays: null, excluded: ['进口与销售手续', '实物体验安排', '真实供应报价'] };
   const p = pricing[brief.productType];
   return { costMin: p.min, costMax: p.max, moq: p.moq, leadDays: p.days, targetPrice: brief.targetRetailPrice ?? brief.budget, label: '規則估算示例，非供應商報價', excluded: ['物流', '稅費', '退貨', '渠道抽成', '文化授權費', '打樣與檢測費'], nextSteps: ['準備尺寸、材料與工藝圖稿', '向實際供應商詢價並索取樣品', '確認品質、必要檢測與授權後再定價'] };
 }
@@ -31,7 +34,7 @@ export async function runWorkflow(project, provider, { delayMs = DEFAULT_STEP_DE
         project.outputs[definition.id] = result.data;
         step.usage = result.usage;
       } else if (definition.id === 'supply') project.outputs.supply = estimateSupply(project.brief);
-      else project.outputs.review = { requiresHuman: true, provenance: '使用者故事／未完成外部事實核查', rights: '待確認圖稿、故事與文化元素的使用權', cost: '示例估算，尚未詢價', checks: ['故事不等於非遺認證', '創作者確認來源與使用權', '真人主持；AI 特效明示', '此版本不支援交易與公開發布'] };
+      else project.outputs.review = { requiresHuman: true, provenance: '使用者资料／未完成外部事实核查', rights: '待确认照片、故事与品牌素材的使用范围', cost: '未取得真实供应报价', checks: isItalia(project) ? ['商品档案与意大利语原文须核对', '图片与品牌素材展示范围须确认', '人工确认版本、用途、渠道与有效期', '暂停问题内容，更正后重新确认', '当前不提供交易、进口办理或外部推流'] : ['故事不等於非遺認證', '創作者確認來源與使用權', '真人主持；AI 特效明示', '此版本不支援交易與公開發布'] };
       step.processingMs = Math.round(performance.now() - started);
       // Mock content is immediate; leave time to read each step without claiming model work.
       if (provider.mode === 'mock') {
@@ -75,20 +78,20 @@ export function exportProject(project) {
   return [
     `# ${o.design?.title || '來物共創草稿'}`,
     `狀態：${project.status}；內容模式：${project.mode}；版本：${project.revision}。此文件是概念草稿，不是商品認證或商業承諾。`,
-    '## 原始需求', project.brief.story, `文化來源：${project.brief.country}；在地工藝：${project.brief.craft}；目標人群：${project.brief.audience}`,
+    '## 原始需求', project.brief.story, isItalia(project) ? `品牌接洽：米兰；测试城市：深圳；展示范围：原产商品；目標人群：${project.brief.audience}` : `文化來源：${project.brief.country}；在地工藝：${project.brief.craft}；目標人群：${project.brief.audience}`,
     '## 文化整理', o.culture?.interpretation || '尚未完成', ...(o.culture?.cautions || []).map(x => `- ${x}`),
-    '## 商品概念', o.design?.tagline || '', o.design?.concept || '', `材料：${o.design?.materials?.join('、') || '待確認'}`,
-    '## 供應鏈估算（示例）', o.supply ? `單件成本 ¥${o.supply.costMin}–${o.supply.costMax}；目標售價 ¥${o.supply.targetPrice}；示例起訂量 ${o.supply.moq}；不含${o.supply.excluded.join('、')}。需真實詢價。` : '尚未完成',
+    isItalia(project) ? '## 展示策划' : '## 商品概念', o.design?.tagline || '', o.design?.concept || '', `${isItalia(project) ? '展示材料' : '材料'}：${o.design?.materials?.join('、') || '待確認'}`,
+    isItalia(project) ? '## 商品资料核对' : '## 供應鏈估算（示例）', isItalia(project) ? '原产商品展示测试；无中国生产估算、起订量或交期承诺。' : o.supply ? `單件成本 ¥${o.supply.costMin}–${o.supply.costMax}；目標售價 ¥${o.supply.targetPrice}；示例起訂量 ${o.supply.moq}；不含${o.supply.excluded.join('、')}。需真實詢價。` : '尚未完成',
+    ...(isItalia(project) ? ['## Italia 商品与原文档案', JSON.stringify(b.italia.dossier, null, 2), '## 版本、用途、渠道与人工确认', JSON.stringify(b.italia.history, null, 2), '## 四维测试反馈（录入次数，不是人数、订单或需求证明）', JSON.stringify(pilotReport(project), null, 2), '## 展示问题与处理', JSON.stringify(b.italia.incidents, null, 2)] : []),
     '## 真人主播腳本', o.host?.openingZh || '', o.host?.openingEn || '', ...(o.host?.questions || []).map(x => `- ${x}`),
     '## 待確認', ...(o.review?.checks || []).map(x => `- ${x}`),
     '## 修改記錄', ...project.feedback.map(x => `- v${x.revision} ${x.target}：${x.before} → ${x.after}；原因：${x.reason}；時間：${x.at}`),
     '## 測款觀察（手動錄入，不代表獨立受訪人數或真實訂單）', ...project.observations.map(x => `- ${x.channel} / ${x.decision} / ${x.note}`),
     '## 业务交付记录（本地流程演示）',
-    `路径：${b.route}；品牌来源：${b.profile.brandOrigin}；生产地：${b.profile.productionPlace}；发货地：${b.profile.shippingPlace}；销售主体：${b.profile.seller}；进口主体：${b.profile.importer}`,
-    `素材范围：${b.rights.state}；本地展示：${b.rights.display}；打样演练：${b.rights.sample}；量产与销售授权：未开放；署名：${b.rights.credit || '待确认'}；依据：${b.rights.evidence || '待提交'}`,
+    isItalia(project) ? `路径：IT；品牌：${b.italia.dossier.brand || '待确认'}；具体地区：${b.italia.dossier.region || '待确认'}；实际制造地：${b.italia.dossier.origin || '待确认'}；进口办理与真实销售：未接入` : `路径：${b.route}；品牌来源：${b.profile.brandOrigin}；生产地：${b.profile.productionPlace}；发货地：${b.profile.shippingPlace}；销售主体：${b.profile.seller}；进口主体：${b.profile.importer}`,
+    `素材范围：${b.rights.state}；本地展示：${b.rights.display}；${isItalia(project) ? '仅展示测试' : '打样演练：' + b.rights.sample}；量产与销售授权：未开放；署名：${b.rights.credit || '待确认'}；依据：${b.rights.evidence || '待提交'}`,
     ...b.confirmations.map(c => `- ${c.actor} / ${c.scope} / v${c.contentRevision} / ${c.invalidatedAt ? '已失效' : '本地演示签收'} / ${c.at}`),
-    '## 询价规格与示例回复', b.spec ? JSON.stringify(b.spec, null, 2) : '尚未冻结询价规格', ...b.quotes.map(q => JSON.stringify(q)),
-    '## 样品演练', b.sample ? JSON.stringify(b.sample, null, 2) : '尚无样品送验记录',
+    ...(isItalia(project) ? [] : ['## 询价规格与示例回复', b.spec ? JSON.stringify(b.spec, null, 2) : '尚未冻结询价规格', ...b.quotes.map(q => JSON.stringify(q)), '## 样品演练', b.sample ? JSON.stringify(b.sample, null, 2) : '尚无样品送验记录']),
     '## 场次与反馈版本', ...b.sessions.map(s => `- 场次 ${s.number} / ${s.id} / v${s.contentRevision} / ${s.state} / 反馈截止 ${s.feedbackUntil}`),
     ...project.observations.filter(o => o.sessionId).map(o => `- ${o.sessionId} / v${o.contentRevision} / ${o.useCase} / ${o.note}`),
     '## 品牌下一轮决定', ...b.decisions.map(d => `- ${d.decision} / ${d.reason} / 依据场次 ${d.sessionId}`),

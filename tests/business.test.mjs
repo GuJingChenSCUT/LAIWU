@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { createProject, runWorkflow, recordCorrection } from '../server/workflow.mjs';
 import { createProvider } from '../server/providers.mjs';
-import { seeds } from '../server/data.mjs';
+import { legacySeeds as seeds } from '../server/data.mjs';
 import { ensureBusiness, mutateBusiness, releaseIssues, hasConfirmation, quoteReadiness, recordSessionObservation, businessView } from '../server/business.mjs';
 
 async function fixture() {

@@ -1,9 +1,11 @@
+import { createItalianWorkspace, isItalianProject } from './italia.js';
 export function createWorkspace({ api, getProject, setProject, e, productArt, toast }) {
   let catalog;
   let role = 'brand';
   let tab = 'overview';
   let saving = false;
   const root = document.querySelector('#work-root');
+  const italian = createItalianWorkspace({ root, api, getProject, setProject, e, toast });
   const tabs = { overview: '项目与待办', rights: '文化与权利', sourcing: '询价与样品', script: '讲稿与场次', delivery: '交付与复盘', audience: '观众体验' };
   const allowed = { brand: ['overview', 'rights', 'sourcing', 'script', 'delivery'], culture: ['rights', 'overview'], supplier: ['sourcing'], host: ['script', 'overview'], audience: ['audience'] };
   try {
@@ -95,8 +97,9 @@ export function createWorkspace({ api, getProject, setProject, e, productArt, to
   }
   function render() {
     if (!catalog) return;
+    if (italian.render()) return;
     const p = getProject();
-    const roles = catalog.roles;
+    const roles = catalog.roles.filter(r => Object.hasOwn(allowed, r.id));
     const chosen = roles.find(r => r.id === role);
     if (!allowed[role].includes(tab)) tab = allowed[role][0];
     if (!p || !['awaiting_review', 'demo_ready'].includes(p.status)) {
@@ -140,6 +143,7 @@ export function createWorkspace({ api, getProject, setProject, e, productArt, to
     }
   }
   root.addEventListener('click', event => {
+    if (isItalianProject(getProject())) return;
     const button = event.target.closest('button');
     if (!button || button.disabled) return;
     if (button.dataset.wrole || button.dataset.wtab) {
@@ -160,10 +164,12 @@ export function createWorkspace({ api, getProject, setProject, e, productArt, to
     }
   });
   root.addEventListener('change', event => {
+    if (isItalianProject(getProject())) return;
     if (event.target.id === 'audience-session') { selectedSession = event.target.value; render(); }
     if (event.target.name === 'route') root.querySelector('#route-helper').textContent = catalog.routes.find(r => r.id === event.target.value).todo;
   });
   root.addEventListener('submit', event => {
+    if (isItalianProject(getProject())) return;
     event.preventDefault();
     const form = event.target;
     if (!form.dataset.business && form.id !== 'audience-feedback') return;
@@ -179,5 +185,5 @@ export function createWorkspace({ api, getProject, setProject, e, productArt, to
       } else await save(form.dataset.business, data);
     });
   });
-  return { init(data) { catalog = data; render(); }, render, open(section) { if (Object.hasOwn(tabs, section)) { tab = section; if (!allowed[role].includes(section)) role = section === 'audience' ? 'audience' : section === 'rights' ? 'culture' : 'brand'; } render(); } };
+  return { init(data) { catalog = data; italian.init(data); render(); }, render, open(section) { if (Object.hasOwn(tabs, section)) { tab = section; if (!allowed[role].includes(section)) role = section === 'audience' ? 'audience' : section === 'rights' ? 'culture' : 'brand'; } render(); } };
 }
